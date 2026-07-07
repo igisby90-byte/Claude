@@ -18,48 +18,33 @@
     {
       "fund": "이지스 멀티드래곤 1호 펀드",
       "assets": [
-        {
-          "label": "리네아-NBH 신기사조합 제2호 (코스모로보틱스)",
-          "keywords": ["코스모로보틱스"]
-        },
-        {
-          "label": "인베스트위드-메리츠 신기조합 1호 (엘디카본)",
-          "keywords": ["엘디카본"]
-        },
-        {
-          "label": "리스큐어바이오",
-          "keywords": ["리스큐어바이오"]
-        },
-        {
-          "label": "로프티록-블루코너 신기조합1호 (세미티에스)",
-          "keywords": ["세미티에스"]
-        }
+        { "label": "이수6CB", "keywords": ["이수"] },
+        { "label": "코스모로보틱스", "keywords": ["코스모로보틱스"] },
+        { "label": "엘디카본", "keywords": ["엘디카본"] },
+        { "label": "리스큐어바이오", "keywords": ["리스큐어바이오"] },
+        { "label": "두성테크", "keywords": ["두성테크"] },
+        { "label": "세미티에스", "keywords": ["세미티에스"] }
       ]
     },
     {
       "fund": "이지스 멀티드래곤 5호 펀드",
       "assets": [
-        {
-          "label": "CCGI 오리진 PEF (드림씨아이에스)",
-          "keywords": ["드림씨아이에스"]
-        }
+        { "label": "이노켐", "keywords": ["이노켐"] },
+        { "label": "레페리", "keywords": ["레페리"] },
+        { "label": "이공이공", "keywords": ["이공이공"] },
+        { "label": "드림씨아이에스", "keywords": ["드림씨아이에스"] },
+        { "label": "리스큐어바이오", "keywords": ["리스큐어바이오"] },
+        { "label": "인흥산업", "keywords": ["인흥산업"] },
+        { "label": "마린텍", "keywords": ["마린텍"] }
       ]
     },
     {
       "fund": "이지스 멀티드래곤 6호 펀드",
       "assets": [
-        {
-          "label": "큐이디-키움 시프트 신기술투자조합 (유에이치씨)",
-          "keywords": ["유에이치씨"]
-        },
-        {
-          "label": "동부건설",
-          "keywords": ["동부건설"]
-        },
-        {
-          "label": "클러쉬",
-          "keywords": ["클러쉬"]
-        }
+        { "label": "유에이치씨 CB", "keywords": ["유에이치씨"] },
+        { "label": "동부건설 CB", "keywords": ["동부건설"] },
+        { "label": "클러쉬", "keywords": ["클러쉬"] },
+        { "label": "펀진", "keywords": ["펀진"] }
       ]
     }
   ]
