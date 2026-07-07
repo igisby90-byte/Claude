@@ -62,6 +62,8 @@ def collect(config: dict, start_date: date, end_date: date) -> dict:
             articles.sort(key=lambda a: a.pub_date, reverse=True)
             results[fund_name][label] = articles
             print(f"  · {fund_name} / {label}: {len(articles)}건")
+            import time
+            time.sleep(0.3)  # 자산 간 간격 (API 호출 제한 회피)
     return results
 
 

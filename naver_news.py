@@ -115,8 +115,7 @@ def search_news(
             "start": start_index,
             "sort": sort,
         }
-        resp = sess.get(NAVER_NEWS_API, headers=headers, params=params, timeout=10)
-        resp.raise_for_status()
+        resp = _get_with_retry(sess, headers, params)
         items = resp.json().get("items", [])
         if not items:
             break
@@ -150,6 +149,28 @@ def search_news(
 
         if page_has_older:
             break
-        time.sleep(0.1)  # API 호출 간 최소 간격
+        time.sleep(0.3)  # API 호출 간 최소 간격 (호출 제한 회피)
 
     return collected
+
+
+def _get_with_retry(session, headers, params, *, max_retries: int = 5):
+    """네이버 API GET 호출. 429/5xx 응답 시 지수 백오프로 재시도한다.
+
+    네이버 검색 API는 짧은 시간에 요청이 몰리면 429(Too Many Requests)를
+    반환한다. 이 경우 잠시 대기 후 다시 시도하면 정상 처리된다.
+    """
+    delay = 2.0
+    for attempt in range(max_retries):
+        resp = session.get(NAVER_NEWS_API, headers=headers, params=params, timeout=10)
+        if resp.status_code == 429 or resp.status_code >= 500:
+            if attempt < max_retries - 1:
+                wait = delay * (2 ** attempt)
+                print(f"    (호출 제한 감지 → {wait:.0f}초 대기 후 재시도)")
+                time.sleep(wait)
+                continue
+        resp.raise_for_status()
+        return resp
+    # 모든 재시도 실패 시 마지막 응답으로 예외 발생
+    resp.raise_for_status()
+    return resp
