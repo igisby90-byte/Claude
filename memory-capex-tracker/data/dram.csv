@@ -1,0 +1,9 @@
+quarter,qoq_low_pct,qoq_mid_pct,qoq_high_pct,status,note
+2025Q1,0,0,0,base,지수 기준분기(=100)
+2025Q2,3,5.5,8,actual~,근사치 — TrendForce 발표치로 보정
+2025Q3,10,12.5,15,actual~,근사치
+2025Q4,45,50,55,actual~,4Q25 급등 — 발표치로 보정
+2026Q1,93,95.5,98,actual,서버 DRAM 계약가 최대 +98%
+2026Q2,58,60.5,63,forecast,TrendForce 전망
+2026Q3,13,15.5,18,forecast,TrendForce 2026-07-09 (+13~18%)
+2026Q4,0,2.5,5,placeholder,미발표 — 전망치 입력

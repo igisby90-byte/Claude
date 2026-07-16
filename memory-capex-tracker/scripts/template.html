@@ -1,0 +1,366 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>메모리 착시 트래커 — 명목 capex vs 실질 구매량</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --page:         #f9f9f7;
+    --surface-1:    #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary:#52514e;
+    --text-muted:   #898781;
+    --grid:         #e1e0d9;
+    --baseline:     #c3c2b7;
+    --border:       rgba(11,11,11,0.10);
+    --s-msft:       #2a78d6;  /* blue */
+    --s-googl:      #008300;  /* green */
+    --s-meta:       #e87ba4;  /* magenta */
+    --s-amzn:       #eda100;  /* yellow */
+    --nominal:      #2a78d6;
+    --real:         #eda100;
+    --dfii:         #4a3aa7;
+    --up-good:      #006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page:#0d0d0d; --surface-1:#1a1a19; --text-primary:#ffffff;
+      --text-secondary:#c3c2b7; --text-muted:#898781; --grid:#2c2c2a;
+      --baseline:#383835; --border:rgba(255,255,255,0.10);
+      --s-msft:#3987e5; --s-googl:#008300; --s-meta:#d55181; --s-amzn:#c98500;
+      --nominal:#3987e5; --real:#c98500; --dfii:#9085e9; --up-good:#0ca30c;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --page:#0d0d0d; --surface-1:#1a1a19; --text-primary:#ffffff;
+    --text-secondary:#c3c2b7; --text-muted:#898781; --grid:#2c2c2a;
+    --baseline:#383835; --border:rgba(255,255,255,0.10);
+    --s-msft:#3987e5; --s-googl:#008300; --s-meta:#d55181; --s-amzn:#c98500;
+    --nominal:#3987e5; --real:#c98500; --dfii:#9085e9; --up-good:#0ca30c;
+  }
+  .viz-root { background:var(--page); color:var(--text-primary);
+    font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+    margin:0; padding:24px; min-height:100vh; box-sizing:border-box; }
+  .viz-root * { box-sizing:border-box; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--text-secondary); font-size:13px; margin:0 0 20px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:20px; }
+  .tile { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .tile .k { font-size:12px; color:var(--text-secondary); }
+  .tile .v { font-size:26px; font-weight:650; margin-top:2px; }
+  .tile .d { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .controls { display:flex; flex-wrap:wrap; align-items:center; gap:16px;
+    background:var(--surface-1); border:1px solid var(--border); border-radius:10px;
+    padding:10px 16px; margin-bottom:20px; font-size:13px; }
+  .controls label { color:var(--text-secondary); }
+  .controls input[type=range] { vertical-align:middle; width:180px; }
+  .controls b { font-variant-numeric:tabular-nums; }
+  .controls button { background:none; border:1px solid var(--border); border-radius:6px;
+    color:var(--text-primary); padding:4px 10px; cursor:pointer; font-size:12px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(430px,1fr)); gap:16px; }
+  .card { background:var(--surface-1); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .card h2 { font-size:14px; margin:0 0 2px; }
+  .card .note { font-size:12px; color:var(--text-muted); margin:0 0 10px; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--text-secondary); margin-bottom:6px; }
+  .legend span { display:inline-flex; align-items:center; gap:5px; }
+  .legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .chartwrap { position:relative; overflow-x:auto; }
+  svg { display:block; max-width:100%; }
+  svg text { font:11px system-ui,-apple-system,"Segoe UI",sans-serif; fill:var(--text-muted); }
+  svg text.dl { font-size:11px; font-weight:600; fill:var(--text-secondary); }
+  .tip { position:absolute; pointer-events:none; background:var(--surface-1);
+    border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12px;
+    box-shadow:0 4px 14px rgba(0,0,0,.15); display:none; z-index:5; min-width:130px; }
+  .tip b { font-variant-numeric:tabular-nums; }
+  .tip .row { display:flex; justify-content:space-between; gap:14px; }
+  .tip i { width:8px; height:8px; border-radius:2px; display:inline-block; margin-right:5px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; margin-top:8px; }
+  th,td { border-bottom:1px solid var(--grid); padding:5px 8px; text-align:right;
+    font-variant-numeric:tabular-nums; color:var(--text-secondary); }
+  th:first-child,td:first-child { text-align:left; }
+  th { color:var(--text-muted); font-weight:600; }
+  .tblwrap { display:none; overflow-x:auto; }
+  .showtbl .tblwrap { display:block; }
+  .showtbl .chartwrap { display:none; }
+  .foot { color:var(--text-muted); font-size:12px; margin-top:20px; }
+  .foot code { background:var(--surface-1); border:1px solid var(--border); border-radius:4px; padding:1px 5px; }
+</style>
+<div class="viz-root" id="app">
+  <h1>메모리 착시 트래커</h1>
+  <p class="sub">명목 capex vs 실질 구매량 — DFII10 · 빅테크 4사 capex · DRAM 계약가 · 데이터 생성일 <span id="gen"></span></p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="controls">
+    <label>메모리·부품 비중 가정: <b id="shareVal"></b></label>
+    <input type="range" id="share" min="6" max="16" step="0.5">
+    <span style="color:var(--text-muted)">MSFT 자백치 13.2% · Meta 기준 ~8%</span>
+    <button id="tblBtn">표로 보기</button>
+  </div>
+
+  <div class="grid2">
+    <div class="card" id="c-capex">
+      <h2>빅테크 4사 분기 capex (명목, $B)</h2>
+      <p class="note">2026년 막대는 연간 가이던스 배분 추정 — 실적 발표치로 교체</p>
+      <div class="legend"></div><div class="chartwrap"></div><div class="tblwrap"></div>
+    </div>
+    <div class="card" id="c-dram">
+      <h2>서버 DRAM 계약가 지수 (2025Q1=100)</h2>
+      <p class="note">밴드 = TrendForce QoQ 전망 하단~상단 누적 · 라벨 = QoQ 중간값</p>
+      <div class="legend"></div><div class="chartwrap"></div><div class="tblwrap"></div>
+    </div>
+    <div class="card" id="c-vol">
+      <h2>메모리: 명목 지출 vs 실질 구매량 (지수, 2025Q1=100)</h2>
+      <p class="note">명목 지출 = 총 capex × 비중 가정 · 실질 = 명목 ÷ DRAM 가격지수 (비트 프록시)</p>
+      <div class="legend"></div><div class="chartwrap"></div><div class="tblwrap"></div>
+    </div>
+    <div class="card" id="c-yoy">
+      <h2>총 capex YoY 성장률: 명목 vs 실질 (%)</h2>
+      <p class="note">실질 = 메모리 부분만 가격지수로 디플레이트 — “착시 폭”은 두 선의 간격</p>
+      <div class="legend"></div><div class="chartwrap"></div><div class="tblwrap"></div>
+    </div>
+    <div class="card" id="c-dfii" style="grid-column:1/-1">
+      <h2>DFII10 — 10년 TIPS 실질금리 (%, 월말)</h2>
+      <p class="note">할인율 환경 — 빈 구간은 data/dfii10.csv에 채워 넣으세요 (scripts/fetch_dfii10.py)</p>
+      <div class="legend"></div><div class="chartwrap"></div><div class="tblwrap"></div>
+    </div>
+  </div>
+
+  <p class="foot">업데이트: <code>data/*.csv</code> 수정 → <code>python scripts/build.py</code> 실행 → 이 파일과 tracker.xlsx가 함께 재생성됩니다.</p>
+</div>
+<script>
+const DATA = /*__DATA__*/;
+
+const css = n => getComputedStyle(document.querySelector('.viz-root')).getPropertyValue(n).trim();
+const fmt = (v,d=1) => v==null?'–':v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+// ---------- derived series ----------
+function derive(sharePct){
+  const s = sharePct/100;
+  const cap = DATA.capex.map(r => ({...r, total:r.msft+r.googl+r.meta+r.amzn}));
+  // DRAM index (mid/low/high cumulated), aligned to capex quarters where present
+  let m=100, lo=100, hi=100;
+  const idx = DATA.dram.map(r => {
+    m*=1+r.mid/100; lo*=1+r.low/100; hi*=1+r.high/100;
+    return {q:r.q, mid:m, low:lo, high:hi, qoq:r.mid, status:r.status};
+  });
+  const idxByQ = Object.fromEntries(idx.map(r=>[r.q,r]));
+  const der = cap.map(r=>{
+    const i = idxByQ[r.q];
+    const mem = r.total*s;
+    const real = i ? (r.total-mem) + mem/(i.mid/100) : null;
+    return {q:r.q, total:r.total, mem, memReal: i? mem/(i.mid/100):null, real, status:r.status};
+  });
+  // index mem & memReal to first quarter having an index (2025Q1)
+  const base = der.find(d=>d.memReal!=null);
+  der.forEach(d=>{
+    d.memIdx = d.memReal!=null && base ? d.mem/base.mem*100 : null;
+    d.volIdx = d.memReal!=null && base ? d.memReal/base.memReal*100 : null;
+  });
+  // YoY
+  const byQ = Object.fromEntries(der.map(d=>[d.q,d]));
+  der.forEach(d=>{
+    const prev = byQ[(+d.q.slice(0,4)-1)+d.q.slice(4)];
+    d.yoyNom = prev ? (d.total/prev.total-1)*100 : null;
+    d.yoyReal = (prev && d.real!=null) ? (d.real/(prev.real??prev.total)-1)*100 : null;
+  });
+  return {cap, idx, der};
+}
+
+// ---------- tiny svg chart kit ----------
+function mkSvg(w,h){const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox',`0 0 ${w} ${h}`);s.setAttribute('width',w);s.setAttribute('height',h);return s;}
+function el(n,a){const e=document.createElementNS('http://www.w3.org/2000/svg',n);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function niceMax(v){const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p;}
+function niceScale(min,max,n=5){
+  const span=max-min||1, raw=span/n, p=Math.pow(10,Math.floor(Math.log10(raw))), r=raw/p;
+  const step=(r<=1?1:r<=2?2:r<=2.5?2.5:r<=5?5:10)*p;
+  return {min:Math.floor(min/step)*step, max:Math.ceil(max/step)*step, step};
+}
+function frame(svg,W,H,P,ymin,ymax,step,fmtTick){
+  for(let v=ymin;v<=ymax+step*0.01;v+=step){
+    const y=H-P.b-(H-P.t-P.b)*(v-ymin)/(ymax-ymin);
+    svg.append(el('line',{x1:P.l,x2:W-P.r,y1:y,y2:y,stroke:css(Math.abs(v-ymin)<step*0.01? '--baseline':'--grid'),'stroke-width':1}));
+    const t=el('text',{x:P.l-6,y:y+4,'text-anchor':'end'});t.textContent=fmtTick(v);svg.append(t);
+  }
+}
+function xTicksQ(svg,qs,x,H,P){
+  qs.forEach((q,i)=>{
+    if(q.endsWith('Q1')||qs.length<=8){
+      const t=el('text',{x:x(i),y:H-P.b+16,'text-anchor':'middle'});
+      t.textContent=q.endsWith('Q1')?q.slice(0,4):q.slice(4);svg.append(t);
+    }
+  });
+}
+function attachTip(card,svg,positions,html){
+  const wrap=card.querySelector('.chartwrap');
+  let tip=card.querySelector('.tip');
+  if(!tip){tip=document.createElement('div');tip.className='tip';wrap.append(tip);}
+  const cross=el('line',{y1:0,y2:0,stroke:css('--baseline'),'stroke-width':1,'stroke-dasharray':'3 3',visibility:'hidden'});
+  svg.append(cross);
+  svg.addEventListener('pointermove',e=>{
+    const r=svg.getBoundingClientRect();
+    const mx=(e.clientX-r.left)/r.width*svg.viewBox.baseVal.width;
+    let bi=0,bd=1e9;positions.forEach((p,i)=>{const d=Math.abs(p.x-mx);if(d<bd){bd=d;bi=i;}});
+    const p=positions[bi];
+    cross.setAttribute('x1',p.x);cross.setAttribute('x2',p.x);
+    cross.setAttribute('y1',p.top);cross.setAttribute('y2',p.bottom);cross.setAttribute('visibility','visible');
+    tip.innerHTML=html(bi);tip.style.display='block';
+    const wr=wrap.getBoundingClientRect();
+    let lx=(p.x/svg.viewBox.baseVal.width)*r.width+14;
+    if(lx+tip.offsetWidth>wr.width) lx-=tip.offsetWidth+28;
+    tip.style.left=lx+'px';tip.style.top='20px';
+  });
+  svg.addEventListener('pointerleave',()=>{tip.style.display='none';cross.setAttribute('visibility','hidden');});
+}
+function legend(card,items){
+  card.querySelector('.legend').innerHTML=items.map(([n,c])=>`<span><i style="background:${c}"></i>${n}</span>`).join('');
+}
+function table(card,head,rows){
+  card.querySelector('.tblwrap').innerHTML='<table><tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr>'+
+    rows.map(r=>'<tr>'+r.map(c=>`<td>${c}</td>`).join('')+'</tr>').join('')+'</table>';
+}
+
+// ---------- charts ----------
+function chartCapex(d){
+  const card=document.getElementById('c-capex');
+  const series=[['MSFT','--s-msft','msft'],['GOOGL','--s-googl','googl'],['META','--s-meta','meta'],['AMZN','--s-amzn','amzn']];
+  const W=560,H=300,P={l:44,r:10,t:14,b:30};
+  const rows=d.cap, ymax=niceMax(Math.max(...rows.map(r=>r.total)));
+  const svg=mkSvg(W,H);frame(svg,W,H,P,0,ymax,ymax/5,v=>fmt(v,0));
+  const bw=(W-P.l-P.r)/rows.length, y=v=>H-P.b-(H-P.t-P.b)*v/ymax;
+  const pos=[];
+  rows.forEach((r,i)=>{
+    let acc=0;const x=P.l+bw*i+bw*0.14, w=bw*0.72;
+    series.forEach(([n,c,k],si)=>{
+      const v=r[k],h=(H-P.t-P.b)*v/ymax;
+      const rect=el('rect',{x,y:y(acc+v),width:w,height:Math.max(h-2,0.5),fill:css(c),rx:si===3?4:0,opacity:r.status==='estimate'?0.55:1});
+      svg.append(rect);acc+=v;
+    });
+    const t=el('text',{x:x+w/2,y:y(acc)-5,'text-anchor':'middle','class':'dl'});
+    if(i%2===(rows.length-1)%2)t.textContent=fmt(r.total,0);svg.append(t);
+    pos.push({x:x+w/2,top:P.t,bottom:H-P.b});
+  });
+  xTicksQ(svg,rows.map(r=>r.q),i=>P.l+bw*i+bw/2,H,P);
+  card.querySelector('.chartwrap').prepend(svg);
+  legend(card,series.map(([n,c])=>[n,css(c)]));
+  attachTip(card,svg,pos,i=>{const r=rows[i];
+    return `<div><b>${r.q}</b> ${r.status==='estimate'?'(추정)':''}</div>`+
+      series.map(([n,c,k])=>`<div class="row"><span><i style="background:${css(c)}"></i>${n}</span><b>$${fmt(r[k])}B</b></div>`).join('')+
+      `<div class="row" style="margin-top:3px"><span>합계</span><b>$${fmt(r.total)}B</b></div>`;});
+  table(card,['분기','MSFT','GOOGL','META','AMZN','합계','상태'],
+    rows.map(r=>[r.q,fmt(r.msft),fmt(r.googl),fmt(r.meta),fmt(r.amzn),fmt(r.total),r.status]));
+}
+
+function lineChart(cardId,rows,seriesDefs,yFmt,tipFmt,opt={}){
+  const card=document.getElementById(cardId);
+  const W=560,H=290,P={l:48,r:14,t:14,b:30};
+  const vals=rows.flatMap(r=>seriesDefs.flatMap(s=>[r[s.k]]).filter(v=>v!=null));
+  if(opt.band)vals.push(...rows.flatMap(r=>[r[opt.band[0]],r[opt.band[1]]]).filter(v=>v!=null));
+  let lo=opt.zero?0:Math.min(...vals), hi=Math.max(...vals);
+  const pad=(hi-lo)*0.06||1; if(!opt.zero)lo-=pad; hi+=pad;
+  const sc=niceScale(lo,hi); const ymin=opt.zero?0:sc.min, ymax=sc.max;
+  const svg=mkSvg(W,H);frame(svg,W,H,P,ymin,ymax,sc.step,yFmt);
+  const x=i=>P.l+(W-P.l-P.r)*(rows.length===1?0.5:i/(rows.length-1));
+  const y=v=>H-P.b-(H-P.t-P.b)*(v-ymin)/(ymax-ymin);
+  if(opt.band){
+    let dTop='',dBot=[];
+    rows.forEach((r,i)=>{if(r[opt.band[0]]!=null){dTop+=(dTop?'L':'M')+x(i)+' '+y(r[opt.band[1]]);dBot.push(x(i)+' '+y(r[opt.band[0]]));}});
+    svg.append(el('path',{d:dTop+' L'+dBot.reverse().join(' L')+' Z',fill:css(seriesDefs[0].c),opacity:0.12}));
+  }
+  if(opt.zeroLine && ymin<0){svg.append(el('line',{x1:P.l,x2:W-P.r,y1:y(0),y2:y(0),stroke:css('--baseline'),'stroke-width':1.5}));}
+  seriesDefs.forEach(s=>{
+    let dstr='';rows.forEach((r,i)=>{if(r[s.k]!=null)dstr+=(dstr?'L':'M')+x(i)+' '+y(r[s.k]);});
+    svg.append(el('path',{d:dstr,fill:'none',stroke:css(s.c),'stroke-width':2,'stroke-dasharray':s.dash||'none','stroke-linejoin':'round'}));
+    rows.forEach((r,i)=>{
+      if(r[s.k]==null)return;
+      const est=opt.estKey&&/estimate|forecast|placeholder|approx|fill/.test(r[opt.estKey]||'');
+      svg.append(el('circle',{cx:x(i),cy:y(r[s.k]),r:est?3:4,fill:est?css('--surface-1'):css(s.c),stroke:css(s.c),'stroke-width':est?2:0}));
+    });
+    const last=[...rows].reverse().find(r=>r[s.k]!=null);
+    if(last){const t=el('text',{x:x(rows.indexOf(last))-4,y:y(last[s.k])-9,'text-anchor':'end','class':'dl'});
+      t.setAttribute('style',`fill:${css(s.c)}`);t.textContent=s.n;svg.append(t);}
+  });
+  if(opt.xMonths){
+    rows.forEach((r,i)=>{if(r.m.endsWith('-01')||r.m.endsWith('-07')){
+      const xi=x(i), anchor=xi>W-P.r-34?'end':'middle';
+      const t=el('text',{x:xi,y:H-P.b+16,'text-anchor':anchor});t.textContent=r.m;svg.append(t);}});
+  } else xTicksQ(svg,rows.map(r=>r.q),x,H,P);
+  card.querySelector('.chartwrap').prepend(svg);
+  legend(card,seriesDefs.length>1?seriesDefs.map(s=>[s.n,css(s.c)]):[]);
+  attachTip(card,svg,rows.map((r,i)=>({x:x(i),top:P.t,bottom:H-P.b})),tipFmt);
+  return card;
+}
+
+function render(){
+  const share=+document.getElementById('share').value;
+  document.getElementById('shareVal').textContent=share.toFixed(1)+'%';
+  const d=derive(share);
+  document.querySelectorAll('.chartwrap svg,.tip').forEach(e=>e.remove());
+
+  // tiles
+  const lastA=[...d.der].reverse().find(r=>!/estimate/.test(r.status));
+  const lastIdx=d.idx[d.idx.length-1];
+  const q1_26=d.der.find(r=>r.q==='2026Q1');
+  const lastD=[...DATA.dfii10].reverse().find(r=>r.v!=null);
+  document.getElementById('tiles').innerHTML=[
+    ['최근 실적분기 capex 합계',`$${fmt(lastA?.total,0)}B`,lastA?.q+' · 4사 합산'],
+    ['명목 YoY',fmt(q1_26?.yoyNom,1)+'%','2026Q1 (추정 포함)'],
+    ['실질 YoY (메모리 디플레이트)',fmt(q1_26?.yoyReal,1)+'%',`착시 폭 ${fmt(q1_26?.yoyNom-q1_26?.yoyReal,1)}%p`],
+    ['DRAM 계약가 지수',fmt(lastIdx?.mid,0),`${lastIdx?.q} · 2025Q1=100`],
+    ['DFII10 실질금리',fmt(lastD?.v,2)+'%',lastD?.m+' 기준'],
+  ].map(([k,v,dd])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${dd}</div></div>`).join('');
+
+  chartCapex(d);
+
+  const idxRows=d.idx.map(r=>({q:r.q,mid:r.mid,low:r.low,high:r.high,qoq:r.qoq,status:r.status}));
+  const c2=lineChart('c-dram',idxRows,[{n:'계약가 지수',c:'--nominal',k:'mid'}],v=>fmt(v,0),
+    i=>{const r=idxRows[i];return `<div><b>${r.q}</b> (${r.status})</div>
+      <div class="row"><span>지수(중간)</span><b>${fmt(r.mid,0)}</b></div>
+      <div class="row"><span>범위</span><b>${fmt(r.low,0)}–${fmt(r.high,0)}</b></div>
+      <div class="row"><span>QoQ</span><b>+${fmt(r.qoq,1)}%</b></div>`},
+    {zero:true,band:['low','high'],estKey:'status'});
+  table(c2,['분기','QoQ%(중간)','지수(하단)','지수(중간)','지수(상단)','상태'],
+    idxRows.map(r=>[r.q,fmt(r.qoq,1),fmt(r.low,0),fmt(r.mid,0),fmt(r.high,0),r.status]));
+
+  const volRows=d.der.filter(r=>r.memIdx!=null);
+  const c3=lineChart('c-vol',volRows,
+    [{n:'명목 지출',c:'--nominal',k:'memIdx'},{n:'실질 구매량',c:'--real',k:'volIdx'}],
+    v=>fmt(v,0),
+    i=>{const r=volRows[i];return `<div><b>${r.q}</b></div>
+      <div class="row"><span><i style="background:${css('--nominal')}"></i>명목 지출</span><b>${fmt(r.memIdx,0)} ($${fmt(r.mem,0)}B)</b></div>
+      <div class="row"><span><i style="background:${css('--real')}"></i>실질 구매량</span><b>${fmt(r.volIdx,0)}</b></div>
+      <div class="row"><span>가격 기여</span><b>${fmt(r.memIdx-r.volIdx,0)}pt</b></div>`},
+    {zero:true,estKey:'status'});
+  table(c3,['분기','명목 메모리 지출($B)','명목 지수','실질 구매량 지수','상태'],
+    volRows.map(r=>[r.q,fmt(r.mem,1),fmt(r.memIdx,0),fmt(r.volIdx,0),r.status]));
+
+  const yoyRows=d.der.filter(r=>r.yoyNom!=null);
+  const c4=lineChart('c-yoy',yoyRows,
+    [{n:'명목 YoY',c:'--nominal',k:'yoyNom'},{n:'실질 YoY',c:'--real',k:'yoyReal'}],
+    v=>fmt(v,0)+'%',
+    i=>{const r=yoyRows[i];return `<div><b>${r.q}</b> ${/estimate/.test(r.status)?'(추정)':''}</div>
+      <div class="row"><span><i style="background:${css('--nominal')}"></i>명목</span><b>${fmt(r.yoyNom,1)}%</b></div>
+      <div class="row"><span><i style="background:${css('--real')}"></i>실질</span><b>${fmt(r.yoyReal,1)}%</b></div>
+      <div class="row"><span>착시 폭</span><b>${fmt(r.yoyNom-r.yoyReal,1)}%p</b></div>`},
+    {zero:false,zeroLine:true,estKey:'status'});
+  table(c4,['분기','명목 YoY%','실질 YoY%','착시 폭 %p','상태'],
+    yoyRows.map(r=>[r.q,fmt(r.yoyNom,1),fmt(r.yoyReal,1),fmt(r.yoyNom-r.yoyReal,1),r.status]));
+
+  const dfRows=DATA.dfii10.filter(r=>r.v!=null).map(r=>({m:r.m,v:r.v,status:r.status}));
+  const c5=lineChart('c-dfii',dfRows,[{n:'DFII10',c:'--dfii',k:'v'}],v=>fmt(v,1)+'%',
+    i=>{const r=dfRows[i];return `<div><b>${r.m}</b> (${r.status})</div><div class="row"><span>DFII10</span><b>${fmt(r.v,2)}%</b></div>`},
+    {zero:false,xMonths:true,estKey:'status'});
+  table(c5,['월','DFII10 %','상태'],dfRows.map(r=>[r.m,fmt(r.v,2),r.status]));
+}
+
+document.getElementById('share').value = DATA.params.memory_share_pct;
+document.getElementById('gen').textContent = DATA.generated;
+document.getElementById('share').addEventListener('input',render);
+document.getElementById('tblBtn').addEventListener('click',()=>{
+  const app=document.getElementById('app');app.classList.toggle('showtbl');
+  document.getElementById('tblBtn').textContent=app.classList.contains('showtbl')?'차트로 보기':'표로 보기';
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render);
+render();
+</script>
